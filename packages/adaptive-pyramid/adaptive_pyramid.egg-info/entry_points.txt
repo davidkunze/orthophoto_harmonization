@@ -1,0 +1,2 @@
+[console_scripts]
+adaptive-pyramid = adaptive_pyramid.cli:main

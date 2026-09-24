@@ -1,0 +1,7 @@
+Metadata-Version: 2.4
+Name: adaptive-pyramid
+Version: 0.1.0
+Requires-Dist: rasterio
+Requires-Dist: numpy
+Requires-Dist: shapely
+Requires-Dist: lxml
