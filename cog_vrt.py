@@ -53,7 +53,7 @@ dir_footprint = os.path.join(path_out,footprint_folder)
 
 
 
-formats = ['*.tif', '*.jpg', '*.png', '*.img', '*.ovr']
+formats = ['*.tif', '*.jpg', '*.png', '*.img']
 path_data = pathlib.Path(path_data)
 
 # Collect all files matching the formats

@@ -6,7 +6,7 @@ import multiprocessing as mp
 import time
 import fiona
 # from shapely.geometry import Point, LineString, Polygon
-import geopandas
+# import geopandas
 import pandas
 # import numpy
 import subprocess
@@ -61,51 +61,32 @@ vrt = os.path.join(dir_vrt, vrt_name + '.vrt')
 buildvrtString = 'gdalbuildvrt -overwrite -input_file_list '+ input_list_txt + ' ' + vrt
 subprocess.run(buildvrtString)
 
-level = [16, 2, 2, 2, 2, 2]
+level = [16, 32, 64, 128, 256, 512]
 ovr_list = []
 
+gdaladdoString = f'gdal raster overview add --levels {','.join([str(x) for x in level])} --resampling average --config GDAL_NUM_THREADS ALL_CPUS --config COPY_SRC_OVERVIEWS YES --config OVERVIEW_COMPRESS ZSTD  {vrt}'
+print(gdaladdoString)
+subprocess.run(gdaladdoString)
 
-for x in level:
-    if x == level[0]:
-        gdaladdoString = 'gdaladdo -r average -ro --config GDAL_NUM_THREADS ALL_CPUS --config COPY_SRC_OVERVIEWS YES ' + vrt + ' ' + str(x)
-        print(gdaladdoString)
-        subprocess.run(gdaladdoString)
-        OVERVIEW_FILE = vrt+'.ovr'
-        ovr_list.append(OVERVIEW_FILE)
-        time_level = time.time()
-    else:
-        gdaladdoString = 'gdaladdo -r average -ro --config GDAL_NUM_THREADS ALL_CPUS --config COPY_SRC_OVERVIEWS YES ' + OVERVIEW_FILE + ' ' + str(x)
-        print(gdaladdoString)
-        subprocess.run(gdaladdoString)
-        OVERVIEW_FILE = OVERVIEW_FILE+'.ovr'
-        ovr_list.append(OVERVIEW_FILE)
-        time_level = time.time()
-
-ovr_tif =[]
-
-for x in ovr_list:
-    x_split = x.split('.vrt.ovr')
-    new_name =  x_split[0]+'2.tif'+x_split[1]
-    os.rename(x, new_name)
-    ovr_tif.append(new_name)
-    # os.rename(new_name, x)
+ovr = vrt + '.ovr'
+ovr_tif = ovr.split('.vrt.ovr')[0]+'_2.tif'
+os.rename(ovr, ovr_tif)
 
 vrt_ds = gdal.Open(vrt)
 ulx, xres, xskew, uly, yskew, yres  = vrt_ds.GetGeoTransform()
 
-ovr = ovr_tif[0]
-ds = gdal.Open(ovr)
+ds = gdal.Open(ovr_tif)
 ds.SetProjection('EPSG:'+str(out_srs))
 ds.SetGeoTransform([ulx, level[0]*xres, 0, uly, 0, level[0]*yres])
 ds = None
-gdaltransString = 'gdal_translate ' + ovr + ' ' + vrt[:-4]+ '.tif' + ' -co COMPRESS=ZSTD -co BIGTIFF=YES -co COPY_SRC_OVERVIEWS=YES --config OVERVIEW_COMPRESS ZSTD --config GDAL_NUM_THREADS ALL_CPUS' 
+gdaltransString = 'gdal_translate ' + ovr_tif + ' ' + vrt[:-4]+ '.tif' + ' -co COMPRESS=ZSTD -co BIGTIFF=YES -co COPY_SRC_OVERVIEWS=YES --config OVERVIEW_COMPRESS ZSTD --config GDAL_NUM_THREADS ALL_CPUS' 
 subprocess.run(gdaltransString)
 ovr_final = vrt[:-4]+'.vrt.ovr'
 os.rename(vrt[:-4]+ '.tif',ovr_final)
 
-for x in ovr_tif:
-    os.remove(x)
 os.remove(input_list_txt)
+os.remove(ovr_tif)
+
 
 hours, rem = divmod(time.time() - start_time, 3600)
 minutes, seconds = divmod(rem, 60)

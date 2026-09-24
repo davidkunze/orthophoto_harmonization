@@ -1,4 +1,11 @@
-## Umstrukturierung Rasterdaten
+##Orthophoto Harmonization - Work in Progress
+
+Next steps: 
+- Harmonize skript/split functions from main script
+- Implementation of new gdal application
+- GPU for ovr-calculation
+
+Pipeline
 
 1. Define input parameters
    - input path

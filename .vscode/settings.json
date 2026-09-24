@@ -1,4 +1,14 @@
 {
+<<<<<<< HEAD
     "python-envs.defaultEnvManager": "ms-python.python:conda",
     "python-envs.defaultPackageManager": "ms-python.python:conda"
+=======
+    "python-envs.pythonProjects": [
+        {
+            "path": ".",
+            "envManager": "ms-python.python:conda",
+            "packageManager": "ms-python.python:conda"
+        }
+    ]
+>>>>>>> f23fbb70ea60fb2cf7ab97276813d09b0a62cbc6
 }

@@ -2,12 +2,12 @@ import os
 from osgeo import gdal
 import subprocess
 
-# Define the folder paths for CIR and RGB images (assuming ECW format)
+# Define the folder paths for CIR and RGB images
 cir_folder = r"\\lb-srv\LB-Ortho\ni\nwfva\ortho_2010\solling_nlf_fe\daten\cir\tiff"
 rgb_folder = r"\\lb-srv\LB-Ortho\ni\nwfva\ortho_2010\solling_nlf_fe\daten\rgb\tiff"
 output_folder= r"\\lb-srv\LB-Projekte\fernerkundung\luftbild\ni\flugzeug\2010\solling_nlf_fe\dop\daten\rohdaten"
 
-# Get a list of all CIR images in the CIR folder (in ECW format)
+# Get a list of all CIR images in the CIR folder
 cir_images = [f for f in os.listdir(cir_folder) if f.lower().endswith(('.tif'))]  # Adjust to ECW extension
 
 

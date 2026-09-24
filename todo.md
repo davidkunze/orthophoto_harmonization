@@ -1,5 +1,8 @@
 **Orthos**
-- "path" spalte in kachelübersichtslayer "outline" mit vrt pfad füllen
+- zur erfassung der tatsächlichen Datenabdeckung wurde bisher "gdal_contour -q -fl 0 -b 1 -f "GPKG" -p" genutzt, mit gdal 3.13 erhält man jedoch nur leere geometrien als ergebnis
+  -alternative Numpy?
+   
+- ~~"path" spalte in kachelübersichtslayer "outline" mit vrt pfad füllen~~
 - overviews --> bei mehr als 5 bänder nur übersichten der ersten 5 bänder berechnen
 - COG-Berechnung sehr arbeitsspeicherintensiv --> for start einer neuen Kachel, Test, ob ausreichend Arbeitsspeicher zur Verfügung steht
 - ~~relative path in vrt  --> https://gis.stackexchange.com/questions/155237/where-vrt-files-store-the-location-of-the-tiles~~
@@ -22,8 +25,8 @@
 - ~~Ordnerberezeichnung muss angepasst werden~~
   - ~~footprints in eigenen Ordner? Ordnername --> KonGeo~~
 - ~~Benennung der Vectorlayer nochmal anpassen~~
-- ~~Benennung cog-kacheln anpassen~~ --> Ordnerpfad zu Abkürzungsverzeichnis im Skript aktualisieren
-- ~~Benennung vrt anpassen~~ --> Ordnerpfad zu Abkürzungsverzeichnis im Skript aktualisieren
+- ~~Benennung cog-kacheln anpassen --> Ordnerpfad zu Abkürzungsverzeichnis im Skript aktualisieren~~
+- ~~Benennung vrt anpassen --> Ordnerpfad zu Abkürzungsverzeichnis im Skript aktualisieren~~
 - ~~Liste mit Kacheln --> Funktion mit erst Rasterkachel- und dann Footprintberechnung~~
 - ~~gdal.parseCommandLine mit os.system ersetze~~
 
