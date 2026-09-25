@@ -10,7 +10,7 @@ DATE_FIELD = "Aktualitaet"
 DATE_FROM_FIELD = "datum_bildflug_von"
 DATE_TO_FIELD = "datum_bildflug_bis"
 
-input1_layer = fiona.listlayers(INPUT_1)[0]
+input1_layer = fiona.listlayers(INPUT_1)[1]
 input2_layers = fiona.listlayers(INPUT_2)
 
 gdf_1 = gpd.read_file(INPUT_1, layer=input1_layer)
@@ -35,7 +35,7 @@ for layer_name in input2_layers:
         gdf_2[["_input2_id", "geometry"]],
         gdf_1_work[[DATE_FIELD, "geometry"]],
         how="left",
-        predicate="overlaps"
+        predicate="contains"
     )
 
     aggregation = (
