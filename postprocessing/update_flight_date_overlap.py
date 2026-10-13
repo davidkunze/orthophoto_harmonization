@@ -3,15 +3,20 @@ import pandas as pd
 import fiona
 from pathlib import Path
 
-INPUT_1 = Path(r"\\lb-srv\fern_2\luftbild\he\flugzeug\2023\he_lverm\tdop\doku\Metadaten_2023.gpkg")
-INPUT_2 = Path(r"\\lb-srv\fern_2\luftbild\he\flugzeug\2023\he_lverm\tdop\daten\kacheluebersicht\he_flugzeug_2023_he_lverm_tdop_extent.gpkg")
+INPUT_1 = Path(r"\\lb-srv\fern_2\luftbild\he\flugzeug\2024\he_lverm\tdop\doku\metadaten.gpkg")
+INPUT_2 = Path(r"\\lb-srv\fern_2\luftbild\he\flugzeug\2024\he_lverm\tdop\daten\kacheluebersicht\he_flugzeug_2024_he_lverm_tdop_extent.gpkg")
 
-DATE_FIELD = "Aktualitaet"
+DATE_FIELD = "Metadaten_DOP_Juni-2026_Bildflugdatum"
 DATE_FROM_FIELD = "datum_bildflug_von"
 DATE_TO_FIELD = "datum_bildflug_bis"
+PIXELSIZE_FIELD_gdf_1 = "bodenpixelgroesse_x"
+PIXELSIZE_FIELD_gdf_2 = "original_raeumliche_aufloesung_cm"
 
-input1_layer = fiona.listlayers(INPUT_1)[1]
+fill_pixelsize = False  # Set to True if you want to fill the pixelsize field, False otherwise
+
+input1_layer = fiona.listlayers(INPUT_1)[0]
 input2_layers = fiona.listlayers(INPUT_2)
+
 
 gdf_1 = gpd.read_file(INPUT_1, layer=input1_layer)
 gdf_1[DATE_FIELD] = pd.to_datetime(gdf_1[DATE_FIELD], errors="coerce")
@@ -31,17 +36,55 @@ for layer_name in input2_layers:
     gdf_2 = gdf_2.reset_index(drop=True)
     gdf_2["_input2_id"] = gdf_2.index
 
-    overlap = gpd.sjoin(
-        gdf_2[["_input2_id", "geometry"]],
-        gdf_1_work[[DATE_FIELD, "geometry"]],
-        how="left",
-        predicate="contains"
-    )
+    # overlap = gpd.sjoin(
+    #     gdf_2[["_input2_id", "geometry"]],
+    #     gdf_1_work[[DATE_FIELD, PIXELSIZE_FIELD_gdf_1, "geometry"]],
+    #     how="left",
+    #     predicate="contains"
+    # )
 
-    aggregation = (
-        overlap.groupby("_input2_id")[DATE_FIELD]
-        .agg(date_from="min", date_to="max")
-    )
+    # aggregation = (
+    #     overlap.groupby("_input2_id")[DATE_FIELD]
+    #     .agg(date_from="min", date_to="max")
+    # )
+
+    if fill_pixelsize:
+        overlap = gpd.sjoin(
+                gdf_2[["_input2_id", "geometry"]],
+                gdf_1_work[[DATE_FIELD, PIXELSIZE_FIELD_gdf_1, "geometry"]],
+                how="left",
+                predicate="contains"
+            )
+        
+        aggregation = (
+            overlap.groupby("_input2_id")
+            .agg(
+                date_from=(DATE_FIELD, "min"),
+                date_to=(DATE_FIELD, "max"),
+                pixelsize=(PIXELSIZE_FIELD_gdf_1, "max")
+            )
+        )
+        
+    else:
+        overlap = gpd.sjoin(
+                gdf_2[["_input2_id", "geometry"]],
+                gdf_1_work[[DATE_FIELD, "geometry"]],
+                how="left",
+                predicate="contains"
+            )
+        aggregation = (
+            overlap.groupby("_input2_id")
+            .agg(
+                date_from=(DATE_FIELD, "min"),
+                date_to=(DATE_FIELD, "max")
+            )
+        )
+    
+        # aggregation = (
+        #     overlap.groupby("_input2_id")[DATE_FIELD]
+        #     .agg(date_from="min", date_to="max")
+        # )
+
 
     gdf_2[DATE_FROM_FIELD] = gdf_2["_input2_id"].map(aggregation["date_from"])
     gdf_2[DATE_TO_FIELD] = gdf_2["_input2_id"].map(aggregation["date_to"])
@@ -55,14 +98,34 @@ for layer_name in input2_layers:
         old_date_to
     )
 
+    if fill_pixelsize:
+
+        gdf_2[PIXELSIZE_FIELD_gdf_2] = gdf_2["_input2_id"].map(
+            aggregation["pixelsize"]
+        )
+
+        # Alten Wert behalten, wenn keine Überlappung gefunden wurde
+        gdf_2[PIXELSIZE_FIELD_gdf_2] = gdf_2[PIXELSIZE_FIELD_gdf_2].where(
+            gdf_2[PIXELSIZE_FIELD_gdf_2].notna(),
+            PIXELSIZE_FIELD_gdf_2
+        )
+
     gdf_2 = gdf_2.drop(columns="_input2_id")
 
     gdf_2[DATE_FROM_FIELD] = gdf_2[DATE_FROM_FIELD].astype(str)
     gdf_2[DATE_TO_FIELD] = gdf_2[DATE_TO_FIELD].astype(str)
 
+
+    TEMP_OUTPUT = INPUT_2.with_name("temporary_output.gpkg")
+    
     gdf_2.to_file(
-        INPUT_2,
+        TEMP_OUTPUT,
         layer=layer_name,
         driver="GPKG",
-        mode="w"
+        mode="w",
+        engine="fiona",
     )
+
+# replace the original file with the temporary output
+# fiona.remove(INPUT_2, driver="GPKG")
+# os.replace(TEMP_OUTPUT, INPUT_2)

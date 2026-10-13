@@ -17,13 +17,13 @@ gdal.UseExceptions()
 
 start_time = time.time()
 #insert path as server path: e.g.: "\\lb-srv\Luftbilder\luft..." (do not use drive letter)
-path_data = r'\\lb-srv\LB-Ortho\ni\lverm\orthos_landesweit_stand_2022_0815\DOP_2021'
+path_data = r'\\lb-srv\LB-Z-Temp\001_aktiver_datenbestand\he\20260617_datenlieferung_als_dgm_tdop\tdop_tif_2024_2025\Jahr_2024'
 path_out = path_data
-path_out = r"\\lb-srv\fern_2\luftbild\ni\flugzeug\2021\ni_lverm\tdop\daten"
+path_out = r"\\lb-srv\fern_2\luftbild\he\flugzeug\2024\he_lverm\tdop\daten"
 # naming scheme for tiles: bundesland_tragersystem_jahr_gebiet_auftrageber_datentyp_x-wert_y-wert
     # For abbreviations open "\\lb-server\LB-Projekte\SGB4_InterneVerwaltung\EDV\KON-GEO\2024\vrt_benennung\vrt_benennung.txt"
     # x-wert und y-wert will be added later
-tile_name = 'ni_flugzeug_2021_ni_lverm_tdop'
+tile_name = 'he_flugzeug_2024_he_lverm_tdop'
 vrt_name = tile_name
 # fill string if special nodata-value such as "255" is used in data
 # if nodata-value is "nodata" use empty string ''
@@ -458,7 +458,7 @@ def tiling(input, out_path, extent, count_bands, tile_size, x_res, y_res, nodata
 # create 2x2 km cog tiles from temporary vrt that was created from input data  
 if __name__ == '__main__':
     count = mp.cpu_count()
-    pool = mp.Pool(count-count+4)
+    pool = mp.Pool(count-count+6)
     args = [(vrt_temp, dir_cog, x, band_count, tilesize, xres, yres, nodata_clip_option, nodata_value) for x in tiles]
     pool.starmap(tiling, args)
     pool.close()

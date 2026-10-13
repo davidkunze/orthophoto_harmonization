@@ -4,6 +4,7 @@ adaptive_pyramid/builder.py
 adaptive_pyramid/index.py
 adaptive_pyramid/models.py
 adaptive_pyramid/planner.py
+adaptive_pyramid/vrt.py
 adaptive_pyramid/worker.py
 adaptive_pyramid.egg-info/PKG-INFO
 adaptive_pyramid.egg-info/SOURCES.txt
