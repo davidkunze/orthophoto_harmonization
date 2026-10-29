@@ -166,22 +166,18 @@ class PyramidBuilder:
         }
 
 
-
     def create_vrt(
         self,
-        output_vrt
+        output_vrt,
+        gdal_options=None,
+        recursive=True,
     ):
-        """
-        Erstellt ein VRT aus den COGs.
-        """
-
-        output_vrt = Path(output_vrt)
-
         return build_vrt(
-            self.cog_folder,
-            output_vrt
+            cog_folder=self.cog_folder,
+            output_vrt=output_vrt,
+            recursive=recursive,
+            gdal_options=gdal_options,
         )
-
 
 
     def create_overviews(

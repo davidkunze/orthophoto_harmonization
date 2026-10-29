@@ -1,5 +1,10 @@
 import os
-import sys
+# Problem with Fiona and GDAL on Windows if other software (e.g., PCI Geomatics) is installed that also uses packages like gdal or fiona.
+os.environ["PATH"] = os.pathsep.join(
+    p for p in os.environ["PATH"].split(os.pathsep)
+    if not p.lower().startswith("c:\\pci geomatics\\")
+)
+
 from glob import glob
 import pathlib
 import multiprocessing as mp
@@ -13,23 +18,34 @@ import subprocess
 import rasterio
 from shapely.validation import make_valid 
 from osgeo import gdal, osr, ogr
+
+from adaptive_pyramid import PyramidBuilder
+
 gdal.UseExceptions()
 
+# gdal.SetConfigOption("GDAL_NUM_THREADS", "ALL_CPUS")
+# gdal.SetConfigOption("GDAL_CACHEMAX", "60000")
+
 start_time = time.time()
+
 #insert path as server path: e.g.: "\\lb-srv\Luftbilder\luft..." (do not use drive letter)
-path_data = r'\\lb-srv\LB-Z-Temp\001_aktiver_datenbestand\he\20260617_datenlieferung_als_dgm_tdop\tdop_tif_2024_2025\Jahr_2024'
-path_out = path_data
-path_out = r"\\lb-srv\fern_2\luftbild\he\flugzeug\2024\he_lverm\tdop\daten"
+path_data = r'\\lb-srv\LB-Ortho\he\nwfva\ortho_2009\krofdorf_nwfva\daten'
+# path_out = path_data
+path_out = r"\\lb-srv\fern_1\luftbild\he\flugzeug\2009\krofdorf_nwfva\dop\daten"
+
 # naming scheme for tiles: bundesland_tragersystem_jahr_gebiet_auftrageber_datentyp_x-wert_y-wert
     # For abbreviations open "\\lb-server\LB-Projekte\SGB4_InterneVerwaltung\EDV\KON-GEO\2024\vrt_benennung\vrt_benennung.txt"
     # x-wert und y-wert will be added later
-tile_name = 'he_flugzeug_2024_he_lverm_tdop'
+tile_name = 'ni_flugzeug_2009_krofdorf_nwfva_dop'
 vrt_name = tile_name
 # fill string if special nodata-value such as "255" is used in data
 # if nodata-value is "nodata" use empty string ''
-nodata_value = '0' 
-nodata_clip_option = 0 # if nodata_clip_option = 1, nodata values will be clipped from the tiles
+nodata_value = '0'
 
+# In some cases, pixels contain the nodata value in one band and are incorrectly detected as nodata pixels and are displayed transparently.
+# In such cases, set nodata_clip_option = 1; otherwise, set nodata_clip_option = 0. This option is computationally expensive and should only be used when necessary. 
+nodata_clip_option = 0 # if nodata_clip_option = 1, nodata values will be clipped from the tiles
+nodata_clip_avoid_holes = False # if clip_nodata_inner_rings = True, inner rings of the cutline will be removed to avoid empty holes in the tiles
 
 in_srs_specified = 25832 #in some cases, the coordinate system does not apper GDAL-readable, in such cases, specify coordinate system 
 out_srs = 25832 #EPSG-code of output projection
@@ -67,6 +83,23 @@ input_data = [
 ]
 
 
+# missing = r"\\lb-srv\LB-Z-Temp\David\test\missing_tiles_2.gpkg"
+# missing = geopandas.read_file(missing, layer='missing_tiles_2')
+# missing_tiles = missing['IMAGE'].tolist()
+# mt = []
+# for tile in missing_tiles:
+#     name = os.path.basename(tile).replace('.tif', '_2021.tif')
+#     mt.append(name)
+
+# input_data_old = input_data.copy()
+# input_data = []
+# for tile in input_data_old:
+#     name = os.path.basename(tile)
+#     print(name)
+#     if name in mt:
+#         input_data.append(tile)
+
+
 # create temporary vrt from raw data
 vrt_temp = os.path.join(dir_vrt, 'temp.vrt')
 input_data_str = '\n'.join(input_data)
@@ -76,11 +109,8 @@ with open(input_list_txt, 'w') as file:
     file.write(input_data_str)
     file.close()
 
-buildvrtString = f'gdalbuildvrt -overwrite -allow_projection_difference -input_file_list {input_list_txt} {vrt_temp}'
+buildvrtString = f'gdalbuildvrt -overwrite -allow_projection_difference -b 1 -b 2 -b 3 -b 4 -input_file_list {input_list_txt} {vrt_temp}'
 subprocess.run(buildvrtString)
-
-# buildvrtString = f'gdal raster mosaic --overwrite --input-file-list {input_list_txt} -f VRT {vrt_temp}'
-# subprocess.run(buildvrtString, shell=True, check=True)
 
 folder_list.append(os.path.basename(vrt_temp))
 
@@ -88,7 +118,7 @@ folder_list.append(os.path.basename(vrt_temp))
 vrt_temp_ds = gdal.Open(vrt_temp)
 # get input data projection
 proj = osr.SpatialReference(wkt=vrt_temp_ds.GetProjection())
-in_srs = proj.GetAttrValue('AUTHORITY',1)
+in_srs = int(proj.GetAttrValue('AUTHORITY',1))
 
 # get input data datatype
 band = vrt_temp_ds.GetRasterBand(1)
@@ -104,14 +134,14 @@ else:
     while i < band_count+1:
         nodata_list.append(nodata_value)
         i += 1
-    buildvrtString = f'gdalbuildvrt -srcnodata "{ " ".join(nodata_list) }" -overwrite -allow_projection_difference -input_file_list {input_list_txt} {vrt_temp}'
+    buildvrtString = f'gdalbuildvrt -allow_projection_difference -srcnodata "{ " ".join(nodata_list) }" -b 1 -b 2 -b 3 -b 4 -overwrite -input_file_list {input_list_txt} {vrt_temp}'
     subprocess.run(buildvrtString, shell=True)
     print(f'nodata is existing: {nodata_value}')
 
 
 # get input data extent to check which output tiles contain data
 inputdata_extent = os.path.join(dir_vrt, 'inputdata_extent.gpkg') 
-gdaltindexString = f'gdaltindex -f "GPKG" {inputdata_extent} -t_srs EPSG:{in_srs} --optfile {input_list_txt}'
+gdaltindexString = f'gdaltindex -f "GPKG" {inputdata_extent} --optfile {input_list_txt}'
 subprocess.run(gdaltindexString, shell=True)
 
 ### reproject raw data if not EPSG: 25832
@@ -123,28 +153,31 @@ if not in_srs in [str(out_srs)]:
     inputdata_extent_proj = os.path.join(dir_vrt, f'inputdata_extent_{str(out_srs)}.gpkg') 
     vrt_temp_proj = os.path.join(dir_vrt, f'temp_{str(out_srs)}.vrt')
     if in_srs == None:
+        print("in_srs is NONE") 
         gdalwarpString = f'gdalwarp -of VRT -s_srs EPSG:{in_srs_specified} -t_srs EPSG:{out_srs} {vrt_temp} {vrt_temp_proj}'
         subprocess.run(gdalwarpString, shell=True)
         ogr2ogrString = f'ogr2ogr -f "GPKG" -s_srs EPSG:{in_srs_specified} -t_srs EPSG:{out_srs} {inputdata_extent_proj} {inputdata_extent} inputdata_extent'
         print(ogr2ogrString)
         subprocess.run(ogr2ogrString, shell=True)
-        print("in_srs is NONE")   
     elif in_srs in [4314, 9122]:
+        print("in_srs is 4314 or 9122")   
         # direct projection from 4314, 9122 to 25832 is defective, therefore the projection 31476 is used as in_srs
         in_srs = 31467
+        print(f'overwritten in_srs is {in_srs}')
+        gdalwarpString = f'gdalwarp -of VRT -s_srs EPSG:{in_srs} -t_srs EPSG:{out_srs} {vrt_temp} {vrt_temp_proj}'
+        print(gdalwarpString)
+        subprocess.run(gdalwarpString, shell=True)
+        ogr2ogrString = f'ogr2ogr -f "GPKG" -s_srs EPSG:{in_srs} -t_srs EPSG:{out_srs} {inputdata_extent_proj} {inputdata_extent} inputdata_extent'
+        print(ogr2ogrString)
+        subprocess.run(ogr2ogrString, shell=True)
+    else:
+        print(f'in_srs was detected and is {in_srs}')    
         gdalwarpString = f'gdalwarp -of VRT -s_srs EPSG:{in_srs} -t_srs EPSG:{out_srs} {vrt_temp} {vrt_temp_proj}'
         subprocess.run(gdalwarpString, shell=True)
-        print(f'gdalwarpString: {gdalwarpString}')
         ogr2ogrString = f'ogr2ogr -f "GPKG" -s_srs EPSG:{in_srs} -t_srs EPSG:{out_srs} {inputdata_extent_proj} {inputdata_extent} inputdata_extent'
         subprocess.run(ogr2ogrString, shell=True)
-        print("in_srs is 4314 or 9122")    
-    else:
-        gdalwarpString = f'gdalwarp -of VRT -s_srs EPSG:{in_srs_specified} -t_srs EPSG:{out_srs} {vrt_temp} {vrt_temp_proj}'
-        subprocess.run(gdalwarpString, shell=True)
-        ogr2ogrString = f'ogr2ogr -f "GPKG" -s_srs EPSG:{in_srs_specified} -t_srs EPSG:{out_srs} {inputdata_extent_proj} {inputdata_extent} inputdata_extent'
-        subprocess.run(ogr2ogrString, shell=True)
-        print(f'in_srs is {in_srs}')    
-    warning =  '\n\n\n\n\n WARNHINWEIS! Ausgangsdaten haben kein Koordinatensystem zugewiesen, bitte nachpruefen, ob Daten vollstaendig und lagerichtig berechnet wurden! \n\n\n\n\n'
+        
+    warning =  '\n WARNHINWEIS! Ausgangsdaten haben kein Koordinatensystem zugewiesen, bitte nachpruefen, ob Daten vollstaendig und lagerichtig berechnet wurden! \n'
     vrt_temp = vrt_temp_proj
     inputdata_extent = inputdata_extent_proj
 dataframe = geopandas.read_file(inputdata_extent, layer='inputdata_extent')
@@ -241,7 +274,8 @@ for i in range(ulx_int, ulx_int+width, tilesize):
         polygon_points.append([lrx, j])
         polygon_points.append([i, j])
         tiles_polygon.append(Polygon(polygon_points))
-        if extentGeometry.Intersect(vectorGeometry) == True:
+        # if extentGeometry.Intersect(vectorGeometry) == True:
+        if extentGeometry.Intersect(vectorGeometry) and not extentGeometry.Touches(vectorGeometry) == True:
             tiles.append(tile_ext)
             tiles_polygon_select.append(Polygon(polygon_points))
         del vector
@@ -296,7 +330,7 @@ def remove_inner_rings(geom):
         return geom
 
 # Function to clip nodata values from raster files
-def clip_nodata(input, nodata_value, cutline_dir = None):
+def clip_nodata(input, nodata_value, avoid_holes = False, cutline_dir = None):
     input_path = os.path.dirname(input)
     input_name = os.path.basename(input)
     if cutline_dir is None:
@@ -349,21 +383,25 @@ def clip_nodata(input, nodata_value, cutline_dir = None):
      # Simplifying contour polygon to reduce number of vertices
     simplified_geometries = []
     # Apply the simplification function to each geometry in the GeoDataFrame
-    for geometry in gdf['geometry']:
-        # For MultiPolygon, simplify each individual Polygon in the MultiPolygon
-        simplified_multipolygon = MultiPolygon([simplify_by_angle(p) for p in geometry.geoms])
-        simplified_geometries.append(simplified_multipolygon)
-    gdf['geometry'] = simplified_geometries
-    gdf['geometry'] = gdf['geometry'].apply(make_valid)
-    # gdf['geometry'] = gdf['geometry'].apply(remove_inner_rings).apply(make_valid).apply(remove_inner_rings)
+
+    # for geometry in gdf['geometry']:
+    #     # For MultiPolygon, simplify each individual Polygon in the MultiPolygon
+    #     simplified_multipolygon = MultiPolygon([simplify_by_angle(p) for p in geometry.geoms])
+    #     simplified_geometries.append(simplified_multipolygon)
+    # gdf['geometry'] = simplified_geometries
+    # gdf['geometry'] = gdf['geometry'].apply(make_valid)
+    
+    if avoid_holes == True:
+        gdf['geometry'] = gdf['geometry'].apply(remove_inner_rings).apply(make_valid).apply(remove_inner_rings)
+
     # Save the modified geodata frame back to the file
     gdf.to_file(cutline, layer='contour', driver="GPKG")
     
     if nodata_value == '0':
         src = rasterio.open(rename) 
         dtype = src.dtypes[0]
-        # dst_nodata = numpy.iinfo(dtype).max
-        dst_nodata = -9999
+        dst_nodata = numpy.iinfo(dtype).max
+        # dst_nodata = 65535
         print(f"Using nodata value: {dst_nodata} for dtype: {dtype}")
         src.close()
     else:
@@ -376,6 +414,8 @@ def clip_nodata(input, nodata_value, cutline_dir = None):
     # Clean up temporary files
     os.remove(mask_tif)
     os.remove(rename)
+
+    return dst_nodata
 
 def tiling(input, out_path, extent, count_bands, tile_size, x_res, y_res, nodata_clip_option=None, nodata_value=None):
     i = 1
@@ -447,8 +487,10 @@ def tiling(input, out_path, extent, count_bands, tile_size, x_res, y_res, nodata
             gdalindex_string = f'gdaltindex -tileindex location -lyr_name footprint {footprint} {output}'
             subprocess.run(gdalindex_string, shell=True)
             # clip nodata values from raster tiles
-            clip_nodata(output, nodata_value, cutline_dir=dir_footprint)
+            dst_nodata = clip_nodata(output, nodata_value, avoid_holes = nodata_clip_avoid_holes, cutline_dir=dir_footprint)
             df = geopandas.read_file(outline, layer='contour')
+            return dst_nodata
+
     if 'location' not in df.columns:
         df.insert(1, 'location', output)
         df.to_file(outline, layer='contour', driver='GPKG')  
@@ -460,9 +502,12 @@ if __name__ == '__main__':
     count = mp.cpu_count()
     pool = mp.Pool(count-count+6)
     args = [(vrt_temp, dir_cog, x, band_count, tilesize, xres, yres, nodata_clip_option, nodata_value) for x in tiles]
-    pool.starmap(tiling, args)
+    results = pool.starmap(tiling, args)
     pool.close()
     pool.join()
+    dst_nodata = results[-1]
+    print(results)
+    print(dst_nodata)
 
     # create extent vector layer which contains following three layers
     #   outline of complete dataset
@@ -475,6 +520,7 @@ if __name__ == '__main__':
         tif_path = os.path.join(dir_cog, f"{os.path.basename(x)[:-5]}.tif")
         # remove empty vector tiles, raster tiles
         if df.empty:
+            # continue
             os.remove(x)
             os.remove(tif_path)
         else:
@@ -542,85 +588,132 @@ if __name__ == '__main__':
     insert_medata(extent)
 
 
-    # build vrt from cog tiles
-    dir_cog = pathlib.Path(dir_cog)
-    input_windows_path = dir_cog.rglob("*.tif")
-    tif = []
-    for x in input_windows_path:
-        tif.append(str(x))
-    tile_sample = tif[0]
-    tif= '\n'.join(tif)
 
-    with open(input_list_txt, 'w') as file:
-        file.write(tif)
-        file.close()
+    # # build vrt from cog tiles
+    # dir_cog = pathlib.Path(dir_cog)
+    # input_windows_path = dir_cog.rglob("*.tif")
+    # tif = []
+    # for x in input_windows_path:
+    #     tif.append(str(x))
+    # tile_sample = tif[0]
+    # tif= '\n'.join(tif)
+
+    # with open(input_list_txt, 'w') as file:
+    #     file.write(tif)
+    #     file.close()
     vrt = os.path.join(path_out, f"{vrt_name}.vrt")
     
-    if nodata_clip_option == 1:
-        dataset = gdal.Open(tile_sample)
-        nodata_value = dataset.GetRasterBand(1).GetNoDataValue()
+    # if nodata_clip_option == 1:
+    #     dataset = gdal.Open(tile_sample)
+    #     nodata_value = dataset.GetRasterBand(1).GetNoDataValue()
         
-        nodata_list = []
-        i = 1
-        while i < band_count+1:
-            nodata_list.append(str(int(nodata_value)))
-            i += 1
-        nodata_list = ' '.join(nodata_list)
-        print(f'nodata_list exists: {nodata_list}')
+    #     nodata_list = []
+    #     i = 1
+    #     while i < band_count+1:
+    #         nodata_list.append(str(int(nodata_value)))
+    #         i += 1
+    #     nodata_list = ' '.join(nodata_list)
+    #     print(f'nodata_list exists: {nodata_list}')
     
-    try:
-        nodata_list #check if nodata list exists
+    # try:
+    #     nodata_list #check if nodata list exists
         
-    except NameError:
-        buildvrtString = f'gdalbuildvrt -overwrite -input_file_list {input_list_txt} {vrt}'
-    else:
-        # if nodata value is defined it will be used as source nodata
-        buildvrtString = f'gdalbuildvrt -srcnodata "{ " ".join(nodata_list) }" -overwrite -input_file_list {input_list_txt} {vrt}'
-    subprocess.run(buildvrtString, shell=True)
+    # except NameError:
+    #     buildvrtString = f'gdalbuildvrt -overwrite -input_file_list {input_list_txt} {vrt}'
+    # else:
+    #     # if nodata value is defined it will be used as source nodata
+    #     buildvrtString = f'gdalbuildvrt -srcnodata "{ " ".join(nodata_list) }" -overwrite -input_file_list {input_list_txt} {vrt}'
+    # subprocess.run(buildvrtString, shell=True)
 
 
-    # # create vrt overviews
-    level = [16, 2, 2, 2, 2, 2]
-    ovr_list = []
+    # # # create vrt overviews
+    # level = [16, 2, 2, 2, 2, 2]
+    # ovr_list = []
 
-    for x in level:
-        if x == level[0]:
-            gdaladdoString = f'gdaladdo -r average -ro --config GDAL_NUM_THREADS ALL_CPUS --config COPY_SRC_OVERVIEWS YES {vrt} {str(x)}'
-            print(gdaladdoString)
-            subprocess.run(gdaladdoString, shell=True)
-            OVERVIEW_FILE = f'{vrt}.ovr'
-            ovr_list.append(OVERVIEW_FILE)
-            time_level = time.time()
-        else:
-            gdaladdoString = f'gdaladdo -r average -ro --config GDAL_NUM_THREADS ALL_CPUS --config COPY_SRC_OVERVIEWS YES {OVERVIEW_FILE} {str(x)}'
-            print(gdaladdoString)
-            subprocess.run(gdaladdoString, shell=True)
-            OVERVIEW_FILE = f'{OVERVIEW_FILE}.ovr'
-            ovr_list.append(OVERVIEW_FILE)
-            time_level = time.time()
-            ovr_tif =[]
+    # for x in level:
+    #     if x == level[0]:
+    #         gdaladdoString = f'gdaladdo -r average -ro --config GDAL_NUM_THREADS ALL_CPUS --config COPY_SRC_OVERVIEWS YES {vrt} {str(x)}'
+    #         print(gdaladdoString)
+    #         subprocess.run(gdaladdoString, shell=True)
+    #         OVERVIEW_FILE = f'{vrt}.ovr'
+    #         ovr_list.append(OVERVIEW_FILE)
+    #         time_level = time.time()
+    #     else:
+    #         gdaladdoString = f'gdaladdo -r average -ro --config GDAL_NUM_THREADS ALL_CPUS --config COPY_SRC_OVERVIEWS YES {OVERVIEW_FILE} {str(x)}'
+    #         print(gdaladdoString)
+    #         subprocess.run(gdaladdoString, shell=True)
+    #         OVERVIEW_FILE = f'{OVERVIEW_FILE}.ovr'
+    #         ovr_list.append(OVERVIEW_FILE)
+    #         time_level = time.time()
+    #         ovr_tif =[]
 
-    for x in ovr_list:
-        x_split = x.split('.vrt.ovr')
-        new_name =  f'{x_split[0]}2.tif{x_split[1]}'
-        os.rename(x, new_name)
-        ovr_tif.append(new_name)
+    # for x in ovr_list:
+    #     x_split = x.split('.vrt.ovr')
+    #     new_name =  f'{x_split[0]}2.tif{x_split[1]}'
+    #     os.rename(x, new_name)
+    #     ovr_tif.append(new_name)
 
-    ovr = ovr_tif[0]
+    # ovr = ovr_tif[0]
 
-    ds = gdal.Open(ovr)
-    ds.SetProjection(f'EPSG:{str(out_srs)}')
-    ds.SetGeoTransform([ulx, level[0]*xres, 0, uly, 0, level[0]*yres])
-    ds = None
-    gdaltransString = f'gdal_translate {ovr} {vrt[:-4]}.tif -co COMPRESS=ZSTD -co BIGTIFF=YES -co COPY_SRC_OVERVIEWS=YES --config OVERVIEW_COMPRESS ZSTD --config GDAL_NUM_THREADS ALL_CPUS'
-    subprocess.run(gdaltransString, shell=True)
-    ovr_final = f'{vrt[:-4]}.vrt.ovr'
-    os.rename(f'{vrt[:-4]}.tif', ovr_final)
-    for x in ovr_tif:
-        os.remove(x)
-    os.remove(f'{ovr}.aux.xml')
+    # ds = gdal.Open(ovr)
+    # ds.SetProjection(f'EPSG:{str(out_srs)}')
+    # ds.SetGeoTransform([ulx, level[0]*xres, 0, uly, 0, level[0]*yres])
+    # ds = None
+    # gdaltransString = f'gdal_translate {ovr} {vrt[:-4]}.tif -co COMPRESS=ZSTD -co BIGTIFF=YES -co COPY_SRC_OVERVIEWS=YES --config OVERVIEW_COMPRESS ZSTD --config GDAL_NUM_THREADS ALL_CPUS'
+    # subprocess.run(gdaltransString, shell=True)
+    # ovr_final = f'{vrt[:-4]}.vrt.ovr'
+    # os.rename(f'{vrt[:-4]}.tif', ovr_final)
+    # for x in ovr_tif:
+    #     os.remove(x)
+    # os.remove(f'{ovr}.aux.xml')
 
-    #remove temporary layers
+    # #remove temporary layers
+    # vector_list = glob(os.path.join(dir_footprint, '*'))
+    # for x in vector_list:
+    #     if x != extent:
+    #         os.remove(x)
+
+    # delete_list = glob(os.path.join(dir_vrt, '*'))
+    # for x in delete_list:
+    #     if not x in (vrt, ovr_final):
+    #         openfile = open(x)
+    #         openfile.close()
+    #         print(x)
+    #         os.remove(x)
+    # os.removedirs(dir_vrt)
+
+    builder = PyramidBuilder(
+        dir_cog
+    )
+
+    result = builder.plan()
+    for k,v in result.items():
+
+        print(
+            k,
+            ":",
+            v
+        )
+
+    if nodata_clip_option == 1:
+        nodata_value = dst_nodata
+
+    vrt_options = [
+        "-srcnodata", nodata_value,  
+    ]
+
+    builder.create_vrt(
+        vrt,
+        gdal_options=vrt_options
+    )
+
+
+    builder.create_overviews(
+        vrt,
+        workers=mp.cpu_count()-2
+    )
+
+    # remove temporary layers
     vector_list = glob(os.path.join(dir_footprint, '*'))
     for x in vector_list:
         if x != extent:
@@ -628,12 +721,14 @@ if __name__ == '__main__':
 
     delete_list = glob(os.path.join(dir_vrt, '*'))
     for x in delete_list:
-        if not x in (vrt, ovr_final):
+        if not x in (vrt):
             openfile = open(x)
             openfile.close()
             print(x)
             os.remove(x)
     os.removedirs(dir_vrt)
+
+
 
     hours, rem = divmod(time.time() - start_time, 3600)
     minutes, seconds = divmod(rem, 60)

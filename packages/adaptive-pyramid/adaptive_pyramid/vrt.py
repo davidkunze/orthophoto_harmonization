@@ -6,33 +6,33 @@ import tempfile
 def build_vrt(
     cog_folder,
     output_vrt,
-    recursive=True
+    recursive=True,
+    gdal_options=None,
 ):
-
-
     cog_folder = Path(cog_folder)
     output_vrt = Path(output_vrt)
 
-    files = list(
+    files = sorted(
         cog_folder.rglob("*.tif")
         if recursive
         else cog_folder.glob("*.tif")
     )
 
     if not files:
-        raise RuntimeError(
-            "No COGs found"
-        )
+        raise RuntimeError("No COGs found")
 
-    # Create a temporary file containing the input file paths.
-    # delete=False is required so GDAL can access the file.
+    output_vrt.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    # Temporäre Liste der Eingabedateien erstellen
     with tempfile.NamedTemporaryFile(
         mode="w",
         suffix=".txt",
         encoding="utf-8",
-        delete=False
+        delete=False,
     ) as file:
-
         input_list_txt = Path(file.name)
 
         for path in files:
@@ -42,19 +42,27 @@ def build_vrt(
         cmd = [
             "gdalbuildvrt",
             "-overwrite",
+        ]
+
+        # Zusätzliche GDAL-Optionen übernehmen
+        if gdal_options:
+            cmd.extend(
+                [str(option) for option in gdal_options]
+            )
+
+        # Eingabedateiliste und Ausgabe ergänzen
+        cmd.extend([
             "-input_file_list",
             str(input_list_txt),
             str(output_vrt),
-        ]
+        ])
 
         subprocess.run(
             cmd,
-            check=True
+            check=True,
         )
 
     finally:
-        # Always remove the temporary input file,
-        # even if gdalbuildvrt fails.
         input_list_txt.unlink(missing_ok=True)
 
 
@@ -62,7 +70,7 @@ def build_overviews(
     vrt,
     levels,
     resampling="average",
-    workers=8
+    workers=8,
 ):
     """
     Creates VRT overviews (.ovr).
@@ -78,17 +86,14 @@ def build_overviews(
         "--config",
         "GDAL_NUM_THREADS",
         str(workers),
-        str(vrt)
+        str(vrt),
     ]
 
     cmd.extend(
-        [
-            str(x)
-            for x in levels
-        ]
+        [str(x) for x in levels]
     )
 
     subprocess.run(
         cmd,
-        check=True
+        check=True,
     )
