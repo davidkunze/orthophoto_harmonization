@@ -1,6 +1,7 @@
 **Orthos**
 - zur erfassung der tatsächlichen Datenabdeckung wurde bisher "gdal_contour -q -fl 0 -b 1 -f "GPKG" -p" genutzt, mit gdal 3.13 erhält man jedoch nur leere geometrien als ergebnis
   -alternative Numpy?
+- diffuse NoData-Werte an rändern --> Idee Mittelwert des Raster bilden --> Mittelwerte der NoData-Bereiche sollten sehr niedrig oder sehr hoch ausfallen --> grenzwert maske erstellen 
    
 - ~~"path" spalte in kachelübersichtslayer "outline" mit vrt pfad füllen~~
 - overviews --> bei mehr als 5 bänder nur übersichten der ersten 5 bänder berechnen
