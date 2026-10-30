@@ -28,13 +28,13 @@ gdal.UseExceptions()
 
 start_time = time.time()
 #insert path as server path: e.g.: "\\lb-srv\Luftbilder\luft..." (do not use drive letter)
-path_data = r'\\lb-srv\fern_2\luftbild\ni\flugzeug\2025\fuhrberg_nlf_fe\tdop\daten'
+path_data = r'\\lb-srv\fern_2\luftbild\ni\flugzeug\2026\harz_np\dop\daten'
 path_out = path_data
 # path_out = r"\\lb-srv\fern_2\luftbild\ni\flugzeug\2025\ni_lverm\tdop\daten"
 # naming scheme for tiles: bundesland_tragersystem_jahr_gebiet_auftrageber_datentyp_x-wert_y-wert
     # For abbreviations open "\\lb-server\LB-Projekte\SGB4_InterneVerwaltung\EDV\KON-GEO\2024\vrt_benennung\vrt_benennung.txt"
     # x-wert und y-wert will be added later
-tile_name = 'ni_flugzeug_2025_fuhrberg_nlf_fe_tdop'
+tile_name = 'ni_flugzeug_2026_harz_np_dop'
 vrt_name = tile_name
 # fill string if special nodata-value such as "255" is used in data
 # if nodata-value is "nodata" use empty string ''
@@ -144,7 +144,7 @@ def outline_from_raster(raster_path):
 # create 2x2 km cog tiles from temporary vrt that was created from input data  
 if __name__ == '__main__':
     count = mp.cpu_count()
-    pool = mp.Pool(count-2)
+    pool = mp.Pool(count-count+6)
     pool.starmap(outline_from_raster, [(x,) for x in input_data])
     pool.close()
     pool.join()
@@ -262,19 +262,8 @@ if __name__ == '__main__':
         if x != extent:
             os.remove(x)
 
-    delete_list = glob(os.path.join(dir_vrt, '*'))
-    for x in delete_list:
-        if not x in (vrt):
-            openfile = open(x)
-            openfile.close()
-            print(x)
-            os.remove(x)
-    os.removedirs(dir_vrt)
-
-
+    
 
     hours, rem = divmod(time.time() - start_time, 3600)
     minutes, seconds = divmod(rem, 60)
     print("{:0>2}:{:0>2}:{:05.2f}".format(int(hours), int(minutes), seconds))
-    if warning != '':
-        print(warning)

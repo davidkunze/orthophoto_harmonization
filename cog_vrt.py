@@ -29,14 +29,14 @@ gdal.UseExceptions()
 start_time = time.time()
 
 #insert path as server path: e.g.: "\\lb-srv\Luftbilder\luft..." (do not use drive letter)
-path_data = r'\\lb-srv\LB-Ortho\he\nwfva\ortho_2009\krofdorf_nwfva\daten'
-# path_out = path_data
-path_out = r"\\lb-srv\fern_1\luftbild\he\flugzeug\2009\krofdorf_nwfva\dop\daten"
+path_data = r'\\lb-srv\fern_2\luftbild\ni\flugzeug\2026\harz_np\dop\daten'
+path_out = path_data
+# path_out = r"\\lb-srv\fern_1\luftbild\he\flugzeug\2009\krofdorf_nwfva\dop\daten"
 
 # naming scheme for tiles: bundesland_tragersystem_jahr_gebiet_auftrageber_datentyp_x-wert_y-wert
     # For abbreviations open "\\lb-server\LB-Projekte\SGB4_InterneVerwaltung\EDV\KON-GEO\2024\vrt_benennung\vrt_benennung.txt"
     # x-wert und y-wert will be added later
-tile_name = 'ni_flugzeug_2009_krofdorf_nwfva_dop'
+tile_name = 'ni_flugzeug_2026_harz_np_dop'
 vrt_name = tile_name
 # fill string if special nodata-value such as "255" is used in data
 # if nodata-value is "nodata" use empty string ''
@@ -506,8 +506,6 @@ if __name__ == '__main__':
     pool.close()
     pool.join()
     dst_nodata = results[-1]
-    print(results)
-    print(dst_nodata)
 
     # create extent vector layer which contains following three layers
     #   outline of complete dataset
