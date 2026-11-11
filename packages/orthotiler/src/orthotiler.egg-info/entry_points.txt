@@ -1,0 +1,2 @@
+[console_scripts]
+orthotiler = orthotiler.cli:main

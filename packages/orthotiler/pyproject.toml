@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "orthotiler"
+version = "0.1.0"
+description = "Automated orthophoto tiling and COG generation"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+
+dependencies = [
+    "numpy",
+    "pandas",
+    "geopandas",
+    "shapely>=2.0",
+    "rasterio",
+    "fiona",
+]
+
+[project.scripts]
+orthotiler = "orthotiler.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

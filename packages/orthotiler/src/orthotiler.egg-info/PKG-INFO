@@ -1,0 +1,48 @@
+Metadata-Version: 2.4
+Name: orthotiler
+Version: 0.1.0
+Summary: Automated orthophoto tiling and COG generation
+Requires-Python: <3.13,>=3.12
+Description-Content-Type: text/markdown
+Requires-Dist: numpy
+Requires-Dist: pandas
+Requires-Dist: geopandas
+Requires-Dist: shapely>=2.0
+Requires-Dist: rasterio
+Requires-Dist: fiona
+
+# OrthoTiler
+
+Python package for automated orthophoto processing.
+
+## Features
+
+- Raster discovery
+- GDAL VRT creation
+- Raster reprojection
+- Flexible raster tiling
+- Cloud Optimized GeoTIFF generation
+- NoData clipping
+- Footprint generation
+- Metadata integration
+- Adaptive raster pyramids
+
+## Installation
+
+Install in development mode:
+
+    pip install -e .
+
+## Requirements
+
+- Python 3.12
+- GDAL
+- Rasterio
+- Fiona
+- GeoPandas
+- Shapely
+- NumPy
+- Pandas
+
+GDAL command line utilities must be available
+in the system PATH.

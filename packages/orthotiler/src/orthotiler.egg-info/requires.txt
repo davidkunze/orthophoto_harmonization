@@ -1,0 +1,6 @@
+numpy
+pandas
+geopandas
+shapely>=2.0
+rasterio
+fiona
