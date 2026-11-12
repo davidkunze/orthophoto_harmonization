@@ -10,16 +10,21 @@ import pathlib
 import multiprocessing as mp
 import time
 import fiona
-from shapely.geometry import Point, LineString, Polygon, MultiPolygon
+from shapely.geometry import Point, LineString, Polygon, MultiPolygon, shape
 import geopandas
 import pandas
 import numpy
 import subprocess
 import rasterio
+from rasterio.features import shapes
 from scipy import ndimage
 from shapely.validation import make_valid 
-from osgeo import gdal, osr, ogr
+from scipy import ndimage
+from osgeo import gdal, osr, ogr, gdal_array
+
 from adaptive_pyramid import PyramidBuilder
+
+
 
 gdal.UseExceptions()
 
@@ -29,14 +34,14 @@ gdal.UseExceptions()
 start_time = time.time()
 
 #insert path as server path: e.g.: "\\lb-srv\Luftbilder\luft..." (do not use drive letter)
-path_data = r"\\lb-srv\LB-Ortho\he\nwfva\ortho_2009\krofdorf_nwfva\daten"
-# path_out = path_data
-path_out = r"\\lb-srv\fern_1\luftbild\he\flugzeug\2009\krofdorf_nwfva\dop\daten"
+path_data = r"\\lb-srv\LB-Z-Temp\David\vrt_cog\testdaten\ni_2012_abnkum_nlf_fe\dop\daten"
+path_out = path_data
+# path_out = r"\\lb-srv\fern_1\luftbild\ni\flugzeug\2012\ankum_nlf_fe\dop\daten"
 
 # naming scheme for tiles: bundesland_tragersystem_jahr_gebiet_auftrageber_datentyp_x-wert_y-wert
     # For abbreviations open "\\lb-server\LB-Projekte\SGB4_InterneVerwaltung\EDV\KON-GEO\2024\vrt_benennung\vrt_benennung.txt"
     # x-wert und y-wert will be added later
-tile_name = 'he_flugzeug_2009_krofdorf_nwfva_dop'
+tile_name = 'ni_flugzeug_2012_ankum_nlf_fe_dop'
 vrt_name = tile_name
 # fill string if special nodata-value such as "255" is used in data
 # if nodata-value is "nodata" use empty string ''
@@ -44,7 +49,8 @@ nodata_value = '0'
 
 # In some cases, pixels contain the nodata value in one band and are incorrectly detected as nodata pixels and are displayed transparently.
 # In such cases, set nodata_clip_option = 1; otherwise, set nodata_clip_option = 0. This option is computationally expensive and should only be used when necessary. 
-nodata_clip_option = 1 # if nodata_clip_option = 1, nodata values will be clipped from the tiles
+nodata_clip_option = False # if nodata_clip_option = True, nodata values will be clipped from the tiles
+create_alpha = True # if create_alpha_mask = True, an alpha band will be created for the tiles 
 
 in_srs_specified = 25832 #in some cases, the coordinate system does not apper GDAL-readable, in such cases, specify coordinate system 
 out_srs = 25832 #EPSG-code of output projection
@@ -142,7 +148,9 @@ else:
     while i < band_count+1:
         nodata_list.append(nodata_value)
         i += 1
-    buildvrtString = f'gdalbuildvrt -allow_projection_difference -srcnodata "{ " ".join(nodata_list) }" -b 1 -b 2 -b 3 -b 4 -overwrite -input_file_list {input_list_txt} {vrt_temp}'
+    buildvrtString = f'gdalbuildvrt -allow_projection_difference -srcnodata "{ " ".join(nodata_list) }" -overwrite -input_file_list {input_list_txt} {vrt_temp}'
+    if create_alpha == True:
+        buildvrtString = f'gdalbuildvrt -allow_projection_difference -srcnodata None -overwrite -input_file_list {input_list_txt} {vrt_temp}'
     subprocess.run(buildvrtString, shell=True)
     print(f'nodata is existing: {nodata_value}')
 
@@ -357,96 +365,6 @@ def simplify_geometry(geometry):
     return geometry
 
 
-# Function to clip nodata values from raster files
-# def clip_nodata(input, nodata_value, avoid_holes = False, cutline_dir = None):
-#     input_path = os.path.dirname(input)
-#     input_name = os.path.basename(input)
-#     if cutline_dir is None:
-#         cutline_dir = input_path
-#     rename = os.path.join(input_path, f"{input_name.split('.')[0]}_rename.{input_name.split('.')[-1]}")
-#     os.rename(input, rename)
-#     mask_tif = os.path.join(input_path, f"{input_name.split('.')[0]}_mask.{input_name.split('.')[-1]}")
-#     cutline = os.path.join(cutline_dir,f"{input_name.split('.')[0]}.gpkg")
-#     print(cutline)
-   
-#     dataset = gdal.Open(rename)
-    
-#     # Create a mask for nodata values across all bands
-#     band_count = dataset.RasterCount
-#     driver = gdal.GetDriverByName("GTiff")
-    
-#     out_ds = driver.Create(
-#         mask_tif,
-#         dataset.RasterXSize,
-#         dataset.RasterYSize,
-#         1,
-#         gdal.GDT_Byte,
-#         options=["TILED=YES", "COMPRESS=DEFLATE"]
-#     )
-#     out_ds.SetGeoTransform(dataset.GetGeoTransform())
-#     out_ds.SetProjection(dataset.GetProjection())
-
-#     # Read nodata values and create a mask
-#     block_size = 1024
-
-#     for y in range(0, dataset.RasterYSize, block_size):
-#         rows = min(block_size, dataset.RasterYSize - y)
-#         for x in range(0, dataset.RasterXSize, block_size):
-#             cols = min(block_size, dataset.RasterXSize - x)
-#             band_list = []
-#             for band in range(1, band_count + 1):
-#                 b = dataset.GetRasterBand(band).ReadAsArray(x, y, cols, rows)
-#                 band_list.append(b == pandas.to_numeric(nodata_value))
-#             mask = numpy.logical_and.reduce(band_list).astype(numpy.uint8)
-#             out_ds.GetRasterBand(1).WriteArray(mask, x, y)
-#     out_ds.GetRasterBand(1).SetNoDataValue(1)
-#     out_ds = None
-#     dataset = None
-
-    
-
-#     # Create a cutline from the mask
-#     gdalcontour_String = f'gdal_contour -p -fl 1 -b 1 -f "GPKG" {mask_tif} {cutline}'
-#     subprocess.run(gdalcontour_String, shell=True)
-#     # repair invalid geometries in the cutline
-#     gdf = geopandas.read_file(cutline, layer='contour')
-#      # Simplifying contour polygon to reduce number of vertices
-#     simplified_geometries = []
-#     # Apply the simplification function to each geometry in the GeoDataFrame
-
-#     # for geometry in gdf['geometry']:
-#     #     # For MultiPolygon, simplify each individual Polygon in the MultiPolygon
-#     #     simplified_multipolygon = MultiPolygon([simplify_by_angle(p) for p in geometry.geoms])
-#     #     simplified_geometries.append(simplified_multipolygon)
-#     # gdf['geometry'] = simplified_geometries
-#     gdf['geometry'] = gdf['geometry'].apply(make_valid)
-    
-#     if avoid_holes == True:
-#         gdf['geometry'] = gdf['geometry'].apply(remove_inner_rings).apply(make_valid).apply(remove_inner_rings)
-
-
-#     # Save the modified geodata frame back to the file
-#     gdf.to_file(cutline, layer='contour', driver="GPKG")
-    
-#     if nodata_value == '0':
-#         src = rasterio.open(rename) 
-#         dtype = src.dtypes[0]
-#         dst_nodata = numpy.iinfo(dtype).max
-#         # dst_nodata = 65535
-#         print(f"Using nodata value: {dst_nodata} for dtype: {dtype}")
-#         src.close()
-#     else:
-#         dst_nodata = 0
-    
-#     gdalwarpString = f"gdalwarp -overwrite -of COG -srcnodata None -dstnodata {dst_nodata} -co COMPRESS=ZSTD -co PREDICTOR=2 -co BIGTIFF=YES --config OVERVIEW_COMPRESS ZSTD -co OVERVIEW_PREDICTOR=2 -co OVERVIEW_RESAMPLING=average -co OVERVIEW_QUALITY=50  -cutline {cutline} -cl contour -crop_to_cutline {rename} {input}"
-#     print(gdalwarpString)
-#     subprocess.run(gdalwarpString, shell=True)
-
-#     # Clean up temporary files
-#     # os.remove(mask_tif)
-#     os.remove(rename)
-
-#     return dst_nodata
 
 def clip_nodata(input, nodata_value, cutline_dir=None, max_hole_size=20, connectivity=4):
     if nodata_value in (None, ''):
@@ -541,8 +459,245 @@ def clip_nodata(input, nodata_value, cutline_dir=None, max_hole_size=20, connect
     return dst_nodata
 
 
+def create_alpha_mask(
+    input,
+    nodata_value,
+    contour_dir=None,
+    max_hole_size=20,
+    connectivity=4,
+    nodata_mode="equal",
+    fill_boundary_holes=False
+):
+    # 0. Validate parameters
+    if nodata_value in (None, ''):
+        raise ValueError("NoData value must be defined.")
+    if max_hole_size < 0:
+        raise ValueError("max_hole_size must be >= 0.")
+    if connectivity not in (4, 8):
+        raise ValueError("connectivity must be 4 or 8.")
+    if nodata_mode not in ("equal", "less", "greater"):
+        raise ValueError("nodata_mode must be 'equal', 'less' or 'greater'.")
 
-def tiling(input, out_path, extent, count_bands, tile_size, x_res, y_res, nodata_clip_option=None, nodata_value=None):
+    input_path = os.path.dirname(input)
+    input_name = os.path.basename(input)
+    if contour_dir is None:
+        contour_dir = input_path
+    os.makedirs(contour_dir, exist_ok=True)
+
+    name, ext = os.path.splitext(input_name)
+    mask_tif = os.path.join(input_path, f"{name}_mask.tif")
+    temp_tif = os.path.join(input_path, f"{name}_alpha_temp.tif")
+    temp_cog = os.path.join(input_path, f"{name}_alpha_temp_cog.tif")
+    outline = os.path.join(contour_dir, f"{name}.gpkg")
+
+    # Open input raster
+    dataset = gdal.Open(input, gdal.GA_ReadOnly)
+    if dataset is None:
+        raise ValueError(f"Could not open raster: {input}")
+
+    band_count = dataset.RasterCount
+    width = dataset.RasterXSize
+    height = dataset.RasterYSize
+
+    if any(
+        dataset.GetRasterBand(i).GetColorInterpretation() == gdal.GCI_AlphaBand
+        for i in range(1, band_count + 1)
+    ):
+        dataset = None
+        raise ValueError("Input raster already contains an alpha band.")
+
+    driver = gdal.GetDriverByName("GTiff")
+    nodata = float(nodata_value)
+    block_size = 1024
+
+    # 1. Create NoData mask (0 = valid data, 1 = NoData)
+    mask_ds = driver.Create(
+        mask_tif, width, height, 1, gdal.GDT_Byte,
+        options=["TILED=YES", "COMPRESS=DEFLATE"]
+    )
+    mask_ds.SetGeoTransform(dataset.GetGeoTransform())
+    mask_ds.SetProjection(dataset.GetProjection())
+
+    for y in range(0, height, block_size):
+        rows = min(block_size, height - y)
+        for x in range(0, width, block_size):
+            cols = min(block_size, width - x)
+            band_list = []
+
+            for band_nr in range(1, band_count + 1):
+                arr = dataset.GetRasterBand(band_nr).ReadAsArray(x, y, cols, rows)
+
+                if nodata_mode == "equal":
+                    band_mask = (
+                        numpy.isnan(arr)
+                        if numpy.isnan(nodata)
+                        else arr == nodata
+                    )
+                elif nodata_mode == "less":
+                    band_mask = arr < nodata
+                elif nodata_mode == "greater":
+                    band_mask = arr > nodata
+
+                band_list.append(band_mask)
+
+            # NoData only if all bands match the condition
+            mask = numpy.logical_and.reduce(band_list).astype(numpy.uint8)
+            mask_ds.GetRasterBand(1).WriteArray(mask, x, y)
+
+    mask_ds.FlushCache()
+    mask_ds = None
+
+    # 2. Fill small NoData regions
+    with rasterio.open(mask_tif, "r+") as src:
+        mask = src.read(1)
+        structure = (
+            numpy.ones((3, 3), dtype=numpy.uint8)
+            if connectivity == 8
+            else numpy.array(
+                [[0, 1, 0], [1, 1, 1], [0, 1, 0]],
+                dtype=numpy.uint8
+            )
+        )
+
+        labels, num_features = ndimage.label(mask == 1, structure=structure)
+
+        boundary_labels = numpy.unique(
+            numpy.concatenate([
+                labels[0, :], labels[-1, :],
+                labels[:, 0], labels[:, -1]
+            ])
+        )
+
+        counts = numpy.bincount(labels.ravel())
+        small_holes = counts <= max_hole_size
+
+        # Exclude background
+        small_holes[0] = False
+
+        # Optionally exclude regions touching the raster boundary
+        if not fill_boundary_holes:
+            small_holes[boundary_labels] = False
+
+        fill_pixels = small_holes[labels]
+        mask[fill_pixels] = 0
+        src.write(mask, 1)
+
+        filled_regions = numpy.count_nonzero(small_holes)
+        filled_pixels = numpy.count_nonzero(fill_pixels)
+
+        print(
+            f"Found {num_features} regions; "
+            f"filled {filled_regions} regions "
+            f"({filled_pixels} pixels)."
+        )
+
+    # 3. Generate polygons of valid data areas (only value 0)
+    if os.path.exists(outline):
+        os.remove(outline)
+
+    with rasterio.open(mask_tif) as src:
+        mask = src.read(1)
+        transform = src.transform
+        crs = src.crs
+        polygons = []
+
+        for geom, value in shapes(
+            mask,
+            mask=(mask == 0),
+            transform=transform,
+            connectivity=connectivity
+        ):
+            if value == 0:
+                polygon = make_valid(shape(geom))
+                if not polygon.is_empty:
+                    polygons.append(polygon)
+
+    gdf = geopandas.GeoDataFrame(geometry=polygons, crs=crs)
+    gdf.to_file(outline, layer="contour", driver="GPKG")
+    print(f"Created {len(polygons)} valid data polygons.")
+
+    # 4. Append alpha band to original raster
+    dtype = dataset.GetRasterBand(1).DataType
+    numpy_dtype = numpy.dtype(gdal_array.GDALTypeCodeToNumericTypeCode(dtype))
+    alpha_max = (
+        numpy.iinfo(numpy_dtype).max
+        if numpy.issubdtype(numpy_dtype, numpy.integer)
+        else 1.0
+    )
+
+    out_ds = driver.Create(
+        temp_tif, width, height, band_count + 1, dtype,
+        options=["TILED=YES", "COMPRESS=DEFLATE"]
+    )
+    out_ds.SetGeoTransform(dataset.GetGeoTransform())
+    out_ds.SetProjection(dataset.GetProjection())
+    out_ds.SetMetadata(dataset.GetMetadata())
+
+    alpha_band = out_ds.GetRasterBand(band_count + 1)
+    alpha_band.SetColorInterpretation(gdal.GCI_AlphaBand)
+    alpha_band.SetDescription("Alpha")
+
+    with rasterio.open(mask_tif) as mask_src:
+        for band_nr in range(1, band_count + 1):
+            src_band = dataset.GetRasterBand(band_nr)
+            dst_band = out_ds.GetRasterBand(band_nr)
+            dst_band.SetMetadata(src_band.GetMetadata())
+            dst_band.SetDescription(src_band.GetDescription())
+            dst_band.SetColorInterpretation(src_band.GetColorInterpretation())
+
+            if src_band.GetNoDataValue() is not None:
+                dst_band.SetNoDataValue(src_band.GetNoDataValue())
+
+            for y in range(0, height, block_size):
+                rows = min(block_size, height - y)
+                for x in range(0, width, block_size):
+                    cols = min(block_size, width - x)
+                    arr = src_band.ReadAsArray(x, y, cols, rows)
+                    dst_band.WriteArray(arr, x, y)
+
+        # Convert NoData mask to alpha values (0 = transparent, maximum = opaque)
+        for y in range(0, height, block_size):
+            rows = min(block_size, height - y)
+            for x in range(0, width, block_size):
+                cols = min(block_size, width - x)
+                mask = mask_src.read(
+                    1,
+                    window=((y, y + rows), (x, x + cols))
+                )
+                alpha = numpy.where(mask == 1, 0, alpha_max).astype(numpy_dtype)
+                alpha_band.WriteArray(alpha, x, y)
+
+    out_ds.FlushCache()
+    out_ds = None
+    dataset = None
+
+    # 5. Convert output to Cloud Optimized GeoTIFF
+    result = gdal.Translate(
+        temp_cog, temp_tif, format="COG",
+        creationOptions=[
+            "COMPRESS=ZSTD",
+            "BIGTIFF=IF_SAFER",
+            "OVERVIEWS=AUTO"
+        ]
+    )
+    if result is None:
+        raise RuntimeError("COG creation failed.")
+    result = None
+
+    os.replace(temp_cog, input)
+
+    # 6. Remove temporary files
+    for path in [mask_tif, temp_tif]:
+        if os.path.exists(path):
+            os.remove(path)
+
+    print(f"Alpha band successfully created: {input}")
+    print(f"Contour layer created: {outline}")
+
+    return outline
+
+
+def tiling(input, out_path, extent, count_bands, tile_size, x_res, y_res, nodata_clip_option=False, create_alpha_option=False, nodata_value=None):
     i = 1
     bands = []
     while i < count_bands + 2:
@@ -606,7 +761,7 @@ def tiling(input, out_path, extent, count_bands, tile_size, x_res, y_res, nodata
     df = geopandas.read_file(outline, layer='contour')
     # remove empty vector tiles, raster tiles
     
-    if nodata_clip_option == 1:
+    if nodata_clip_option == True:
         if not df.empty:
         #     os.remove(outline)
         #     # os.remove(output)
@@ -618,6 +773,12 @@ def tiling(input, out_path, extent, count_bands, tile_size, x_res, y_res, nodata
             dst_nodata = clip_nodata(output, nodata_value, cutline_dir=dir_footprint)
             df = geopandas.read_file(outline, layer='contour')
             return dst_nodata
+
+    if create_alpha_option == True:
+        if not df.empty:
+            # create alpha band and contour layer
+            outline = create_alpha_mask(output, nodata_value, contour_dir=dir_footprint, nodata_mode="equal", fill_boundary_holes=False, max_hole_size=100, connectivity=4)
+            df = geopandas.read_file(outline, layer='contour')
 
     if 'location' not in df.columns:
         df.insert(1, 'location', output)
@@ -632,8 +793,8 @@ if not tiles:
 # create 2x2 km cog tiles from temporary vrt that was created from input data  
 if __name__ == '__main__':
     count = mp.cpu_count()
-    pool = mp.Pool(count-6)
-    args = [(vrt_temp, dir_cog, x, band_count, tilesize, xres, yres, nodata_clip_option, nodata_value) for x in tiles]
+    pool = mp.Pool(count-1)
+    args = [(vrt_temp, dir_cog, x, band_count, tilesize, xres, yres, nodata_clip_option, create_alpha, nodata_value) for x in tiles]
     results = pool.starmap(tiling, args)
     pool.close()
     pool.join()
@@ -669,12 +830,12 @@ if __name__ == '__main__':
     df_merged['geometry'] = df_merged['geometry'].make_valid()
     df_merged.to_file(extent, layer='footprint_outline', driver="GPKG")
     # dissolve tile outlines to dataset outline
-    df_outline = df_merged.dissolve(by='ID')
+    df_outline = df_merged.dissolve()
     df_outline['location'] = os.path.join(path_data, f"{vrt_name}.vrt")
     df_outline['geometry'] =df_outline['geometry'].make_valid()
     df_outline.to_file(extent, layer='outline', driver="GPKG")
     # get all 2x2 km tiles which contain data
-    if nodata_clip_option == 1:
+    if nodata_clip_option == True:
         footprints = glob(os.path.join(dir_footprint, '*footprint.gpkg'))
         tiles_footprint = []
         for x in footprints:
@@ -833,8 +994,10 @@ if __name__ == '__main__':
             v
         )
 
-    if nodata_clip_option == 1:
+    if nodata_clip_option == True:
         nodata_value = dst_nodata
+    if create_alpha == True:
+        nodata_value = None
 
     vrt_options = [
         "-srcnodata", nodata_value,  

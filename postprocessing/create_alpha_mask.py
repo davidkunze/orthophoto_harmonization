@@ -256,5 +256,5 @@ def create_alpha_mask(
 contour_directory = r"\\lb-srv\LB-Z-Temp\David\vrt_cog\testdaten\testdaten_addalphamask\test_1\contours"
 # create_alpha(input_file, nodata_value=0, contour_dir=contour_directory, max_hole_size=20, connectivity=4)
 
-input_file = r"\\lb-srv\LB-Z-Temp\David\vrt_cog\testdaten\testdaten_addalphamask\test_1\ni_flugzeug_2018_harz_np_dop_598000_5742000.tif"
-create_alpha(input_file, nodata_value=14000, contour_dir=contour_directory, max_hole_size=10000, connectivity=4, nodata_mode="less", fill_boundary_holes=False)
+input_file = r"\\lb-srv\LB-Z-Temp\David\vrt_cog\testdaten\ni_2012_abnkum_nlf_fe\dop\daten\a_rohdaten\cir_354_5824_rgbi.tif"
+create_alpha_mask(input_file, nodata_value=0, max_hole_size=100, connectivity=4, nodata_mode="equal", fill_boundary_holes=False)
