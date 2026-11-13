@@ -34,9 +34,9 @@ gdal.UseExceptions()
 start_time = time.time()
 
 #insert path as server path: e.g.: "\\lb-srv\Luftbilder\luft..." (do not use drive letter)
-path_data = r"\\lb-srv\LB-Z-Temp\David\vrt_cog\testdaten\ni_2012_abnkum_nlf_fe\dop\daten"
+path_data = r"\\lb-srv\LB-Ortho\ni\nwfva\ortho_2012\ankum_nlf_fe\daten\rgbi_alt"
 path_out = path_data
-# path_out = r"\\lb-srv\fern_1\luftbild\ni\flugzeug\2012\ankum_nlf_fe\dop\daten"
+path_out = r"\\lb-srv\fern_1\luftbild\ni\flugzeug\2012\ankum_nlf_fe\dop\daten"
 
 # naming scheme for tiles: bundesland_tragersystem_jahr_gebiet_auftrageber_datentyp_x-wert_y-wert
     # For abbreviations open "\\lb-server\LB-Projekte\SGB4_InterneVerwaltung\EDV\KON-GEO\2024\vrt_benennung\vrt_benennung.txt"
@@ -613,6 +613,7 @@ def create_alpha_mask(
                     polygons.append(polygon)
 
     gdf = geopandas.GeoDataFrame(geometry=polygons, crs=crs)
+    gdf = gdf.dissolve()
     gdf.to_file(outline, layer="contour", driver="GPKG")
     print(f"Created {len(polygons)} valid data polygons.")
 
